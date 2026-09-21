@@ -2,7 +2,7 @@ package output
 
 import (
 	"strings"
-	
+
 	"charm.land/lipgloss/v2"
 )
 
@@ -11,6 +11,10 @@ var (
 		Foreground(lipgloss.Color("#DCE8E6"))
 
 	Primary = lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#E8CFA8")).
+		Bold(true)
+
+	Secondary = lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#9BD0CC")).
 		Bold(true)
 

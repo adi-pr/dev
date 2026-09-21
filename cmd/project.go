@@ -24,7 +24,7 @@ var projectCmd = &cobra.Command{
 
 var projectListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List known projects",
+	Short: "List Projects",
 
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.Load()
@@ -86,7 +86,7 @@ var projectListCmd = &cobra.Command{
 
 var projectOpenCmd = &cobra.Command{
 	Use:   "open <name>",
-	Short: "Open a project in the configured editor",
+	Short: "Open a project",
 	Args:  cobra.ExactArgs(1),
 
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -122,7 +122,7 @@ var projectOpenCmd = &cobra.Command{
 
 var projectStatusCmd = &cobra.Command{
 	Use:   "status",
-	Short: "Show the status of known projects",
+	Short: "Show project status",
 
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.Load()
