@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/adi-pr/dev/internal/config"
+	"github.com/adi-pr/dev/internal/output"
 	"github.com/adi-pr/dev/internal/project"
 	"github.com/spf13/cobra"
 )
@@ -38,18 +40,44 @@ var projectListCmd = &cobra.Command{
 		if projectJSON {
 			encoder := json.NewEncoder(os.Stdout)
 			encoder.SetIndent("", "  ")
-
 			return encoder.Encode(projects)
 		}
 
-		for _, p := range projects {
-			git := ""
+		fmt.Printf(
+			"%s %s\n",
+			output.Primary.Render("Projects"),
+			output.Subtle.Render(
+				fmt.Sprintf("· %d", len(projects)),
+			),
+		)
 
-			if p.Git {
-				git = " [git]"
+		fmt.Println(
+			output.Rule.Render(
+				strings.Repeat("─", 60),
+			),
+		)
+
+		for _, p := range projects {
+			displayPath := p.Path
+
+			if home, err := os.UserHomeDir(); err == nil {
+				displayPath = strings.Replace(displayPath, home, "~", 1)
 			}
 
-			fmt.Printf("%-24s %s%s\n", p.Name, p.Path, git)
+			name := output.Text.Copy().Bold(true).Render(p.Name)
+			path := output.Subtle.Render(displayPath)
+
+			git := ""
+			if p.Git {
+				git = output.Primary.Render("git")
+			}
+
+			fmt.Printf(
+				"%s %s %s\n",
+				output.PadRight(name, 18),
+				output.PadRight(path, 40),
+				git,
+			)
 		}
 
 		return nil
@@ -121,44 +149,59 @@ var projectStatusCmd = &cobra.Command{
 		}
 
 		fmt.Printf(
-			"%-24s %-20s %-10s %s\n",
-			"PROJECT",
-			"BRANCH",
-			"STATE",
-			"LAST COMMIT",
+			"%s %s\n",
+			output.Primary.Render("Project Status"),
+			output.Subtle.Render(
+				fmt.Sprintf("· %d", len(statuses)),
+			),
+		)
+
+		fmt.Println(
+			output.Rule.Render(
+				strings.Repeat("─", 60),
+			),
 		)
 
 		for _, status := range statuses {
+			name := output.Text.Copy().
+				Bold(true).
+				Render(status.Name)
+
 			if !status.Git {
 				fmt.Printf(
-					"%-24s %-20s %-10s %s\n",
-					status.Name,
-					"-",
-					"-",
-					"-",
+					"%s %s %s\n",
+					output.PadRight(name, 18),
+					output.PadRight(output.Subtle.Render("—"), 15),
+					output.Subtle.Render("no git"),
 				)
 
 				continue
 			}
 
-			state := "clean"
+			branch := status.Branch
 
-			if status.Dirty {
-				state = "dirty"
+			if branch == "" {
+				branch = "detached"
 			}
 
-			lastCommit := "-"
+			lastCommit := "—"
 
 			if status.LastCommit != nil {
 				lastCommit = formatRelativeTime(*status.LastCommit)
 			}
 
 			fmt.Printf(
-				"%-24s %-20s %-10s %s\n",
-				status.Name,
-				status.Branch,
-				state,
-				lastCommit,
+				"%s %s %s %s\n",
+				output.PadRight(name, 18),
+				output.PadRight(
+					output.Branch.Render(branch),
+					15,
+				),
+				output.PadRight(
+					renderState(status.Dirty),
+					12,
+				),
+				output.Subtle.Render(lastCommit),
 			)
 		}
 
@@ -203,6 +246,14 @@ func formatRelativeTime(t time.Time) string {
 	default:
 		return t.Format("2006-01-02")
 	}
+}
+
+func renderState(dirty bool) string {
+	if dirty {
+		return output.Warning.Render("● dirty")
+	}
+
+	return output.Success.Render("● clean")
 }
 
 func init() {
