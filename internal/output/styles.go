@@ -15,8 +15,8 @@ var (
 		Bold(true)
 
 	Secondary = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#9BD0CC")).
-		Bold(true)
+			Foreground(lipgloss.Color("#9BD0CC")).
+			Bold(true)
 
 	Muted = lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#A2ADAC"))

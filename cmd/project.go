@@ -16,6 +16,7 @@ import (
 
 var projectJSON bool
 var projectStatusJSON bool
+var projectInfoJSON bool
 
 var projectCmd = &cobra.Command{
 	Use:   "project",
@@ -209,6 +210,41 @@ var projectStatusCmd = &cobra.Command{
 	},
 }
 
+var projectInfoCmd = &cobra.Command{
+	Use:   "info <name>",
+	Short: "Show project information",
+	Args:  cobra.ExactArgs(1),
+
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cfg, err := config.Load()
+		if err != nil {
+			return err
+		}
+
+		projects, err := project.Discover(cfg.ProjectRoots)
+		if err != nil {
+			return err
+		}
+
+		p, err := project.Find(projects, args[0])
+		if err != nil {
+			return err
+		}
+
+		info := project.GetInfo(p)
+
+		if projectInfoJSON {
+			encoder := json.NewEncoder(os.Stdout)
+			encoder.SetIndent("", " ")
+			return encoder.Encode(info)
+		}
+
+		renderProjectInfo(info)
+
+		return nil
+	},
+}
+
 func formatRelativeTime(t time.Time) string {
 	duration := time.Since(t)
 
@@ -256,12 +292,84 @@ func renderState(dirty bool) string {
 	return output.Success.Render("● clean")
 }
 
+func renderProjectInfo(info project.Info) {
+	fmt.Printf(
+		"%s %s\n",
+		output.Primary.Render(info.Name),
+		output.Subtle.Render("· project info"),
+	)
+
+	fmt.Println(
+		output.Rule.Render(
+			strings.Repeat("─", 60),
+		),
+	)
+
+	printInfoRow("Path", shortenPath(info.Path))
+
+	if info.Git {
+		state := output.Success.Render("● clean")
+
+		if info.Dirty {
+			state = output.Warning.Render("● dirty")
+		}
+
+		git := output.Branch.Render(info.Branch) + "  " + state
+		printInfoRow("Git", git)
+	}
+
+	if info.Remote != "" {
+		printInfoRow("Remote", info.Remote)
+	}
+
+	if info.Language != "" {
+		printInfoRow("Language", info.Language)
+	}
+
+	if info.Framework != "" {
+		printInfoRow("Framework", info.Framework)
+	}
+
+	if info.Environment != "" {
+		printInfoRow("Environment", info.Environment)
+	}
+
+	if info.PackageTool != "" {
+		printInfoRow("Package", info.PackageTool)
+	}
+
+	if info.Module != "" {
+		printInfoRow("Module", info.Module)
+	}
+}
+
+func printInfoRow(label string, value string) {
+	fmt.Printf(
+		"%s %s\n",
+		output.PadRight(
+			output.Subtle.Render(label),
+			14,
+		),
+		output.Text.Render(value),
+	)
+}
+
+func shortenPath(path string) string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return path
+	}
+
+	return strings.Replace(path, home, "~", 1)
+}
+
 func init() {
 	rootCmd.AddCommand(projectCmd)
 
 	projectCmd.AddCommand(projectListCmd)
 	projectCmd.AddCommand(projectOpenCmd)
 	projectCmd.AddCommand(projectStatusCmd)
+	projectCmd.AddCommand(projectInfoCmd)
 
 	projectListCmd.Flags().BoolVar(
 		&projectJSON,
@@ -275,5 +383,12 @@ func init() {
 		"json",
 		false,
 		"output as json",
+	)
+
+	projectInfoCmd.Flags().BoolVar(
+		&projectInfoJSON,
+		"json",
+		false,
+		"output as JSON",
 	)
 }
