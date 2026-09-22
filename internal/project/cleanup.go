@@ -10,9 +10,17 @@ import (
 )
 
 type CleanupCandidate struct {
-	Project      Project   `json:"project"`
-	LastActivity time.Time `json:"last_activity"`
-	Dirty        bool      `json:"dirty"`
+	Project      Project       `json:"project"`
+	LastActivity time.Time     `json:"last_activity"`
+	Safety       CleanupSafety `json:"safety"`
+}
+
+type CleanupSafety struct {
+	Dirty         bool `json:"dirty"`
+	HasRemote     bool `json:"has_remote"`
+	HasUpstream   bool `json:"has_upstream"`
+	AheadOfRemote int  `json:"ahead_of_remote"`
+	Untracked     int  `json:"untracked"`
 }
 
 var ignoredActivityDirs = map[string]bool{
@@ -48,13 +56,9 @@ func FindCleanupCandidates(
 		}
 
 		candidate := CleanupCandidate{
-			Project:      p,
+			Project: p,
 			LastActivity: lastActivity,
-		}
-
-		if p.Git {
-			candidate.Dirty =
-				gitOutput(p.Path, "status", "--porcelain") != ""
+			Safety: CheckCleanupSafety(p),
 		}
 
 		candidates = append(candidates, candidate)
@@ -207,4 +211,94 @@ func Archive(
 	}
 
 	return destination, nil
+}
+
+func CheckCleanupSafety(p Project) CleanupSafety {
+	if !p.Git {
+		return CleanupSafety{}
+	}
+
+	safety := CleanupSafety{}
+
+	status := gitOutput(
+		p.Path,
+		"status",
+		"--porcelain",
+	)
+
+	if status != "" {
+		safety.Dirty = true
+
+		for _, line := range strings.Split(status, "\n") {
+			if strings.HasPrefix(line, "??") {
+				safety.Untracked++
+			}
+		}
+	}
+
+	remote := gitOutput(
+		p.Path,
+		"remote",
+	)
+
+	safety.HasRemote = remote != ""
+
+	upstream := gitOutput(
+		p.Path,
+		"rev-parse",
+		"--abbrev-ref",
+		"--symbolic-full-name",
+		"@{upstream}",
+	)
+
+	if upstream == "" {
+		return safety
+	}
+
+	safety.HasUpstream = true
+
+	ahead := gitOutput(
+		p.Path,
+		"rev-list",
+		"--count",
+		"@{upstream}..HEAD",
+	)
+
+	if ahead != "" {
+		fmt.Sscanf(ahead, "%d", &safety.AheadOfRemote)
+	}
+
+	return safety
+}
+
+type CleanupRisk int
+
+const (
+	CleanupSafe CleanupRisk = iota
+	CleanupReview
+	CleanupUnsafe
+)
+
+func (c CleanupCandidate) Risk() CleanupRisk {
+	if !c.Project.Git {
+		return CleanupReview
+	}
+
+	if c.Safety.Dirty {
+		return CleanupUnsafe
+	}
+
+	if c.Safety.AheadOfRemote > 0 {
+		return CleanupUnsafe
+	}
+
+	if !c.Safety.HasRemote {
+		return CleanupReview
+	}
+
+	if !c.Safety.HasUpstream {
+		return CleanupReview
+	}
+
+	return CleanupSafe
 }

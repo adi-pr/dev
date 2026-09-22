@@ -99,10 +99,7 @@ func renderCleanupCandidates(
 
 		age := formatCleanupAge(candidate.LastActivity)
 
-		state := output.Success.Render("● clean")
-		if candidate.Dirty {
-			state = output.Warning.Render("● dirty")
-		}
+		state := renderCleanupState(candidate)
 
 		fmt.Printf(
 			"%s %s %s\n",
@@ -115,8 +112,6 @@ func renderCleanupCandidates(
 		)
 	}
 }
-
-
 
 func formatCleanupAge(lastActivity time.Time) string {
 	duration := time.Since(lastActivity)
@@ -209,44 +204,108 @@ func promptCleanupAction(
 	)
 
 	fmt.Printf(
-		"%s ",
-		output.Primary.Render("[a]rchive"),
+		"  %s %s\n",
+		output.Subtle.Render("Status"),
+		renderCleanupState(candidate),
 	)
 
-	fmt.Printf(
-		"%s ",
-		output.Muted.Render("[s]kip"),
-	)
+	for {
+		switch candidate.Risk() {
+		case projectdomain.CleanupSafe:
+			fmt.Printf(
+				"%s %s %s",
+				output.Primary.Render("[a]rchive"),
+				output.Error.Render("[d]elete"),
+				output.Muted.Render("[s]kip"),
+			)
 
-	fmt.Printf(
-		"%s",
-		output.Muted.Render("[q]uit"),
-	)
+		case projectdomain.CleanupReview,
+			projectdomain.CleanupUnsafe:
+			fmt.Printf(
+				"%s %s",
+				output.Primary.Render("[a]rchive"),
+				output.Muted.Render("[s]kip"),
+			)
+		}
 
-	fmt.Print(" > ")
-
-	input, err := reader.ReadString('\n')
-	if err != nil {
-		return "", err
-	}
-
-	switch strings.ToLower(strings.TrimSpace(input)) {
-	case "a", "archive":
-		return "archive", nil
-
-	case "s", "skip", "":
-		return "skip", nil
-
-	case "q", "quit":
-		return "quit", nil
-
-	default:
-		fmt.Println(
-			output.Error.Render(
-				"Choose archive, skip, or quit.",
-			),
+		fmt.Printf(
+			" %s > ",
+			output.Muted.Render("[q]uit"),
 		)
 
-		return promptCleanupAction(reader, candidate)
+		input, err := reader.ReadString('\n')
+		if err != nil {
+			return "", err
+		}
+
+		switch strings.ToLower(strings.TrimSpace(input)) {
+		case "a", "archive":
+			return "archive", nil
+
+		case "d", "delete":
+			if candidate.Risk() != projectdomain.CleanupSafe {
+				fmt.Println(
+					output.Error.Render(
+						"Delete is not available for this project.",
+					),
+				)
+				continue
+			}
+
+			return "delete", nil
+
+		case "s", "skip", "":
+			return "skip", nil
+
+		case "q", "quit":
+			return "quit", nil
+
+		default:
+			fmt.Println(
+				output.Error.Render(
+					"Choose archive, delete, skip, or quit.",
+				),
+			)
+		}
 	}
+}
+
+func renderCleanupState(
+	candidate projectdomain.CleanupCandidate,
+) string {
+	if !candidate.Project.Git {
+		return output.Subtle.Render("no git")
+	}
+
+	if candidate.Safety.Dirty {
+		if candidate.Safety.Untracked > 0 {
+			return output.Error.Render(
+				fmt.Sprintf(
+					"● dirty · %d untracked",
+					candidate.Safety.Untracked,
+				),
+			)
+		}
+
+		return output.Error.Render("● dirty")
+	}
+
+	if candidate.Safety.AheadOfRemote > 0 {
+		return output.Warning.Render(
+			fmt.Sprintf(
+				"● %d unpushed",
+				candidate.Safety.AheadOfRemote,
+			),
+		)
+	}
+
+	if !candidate.Safety.HasRemote {
+		return output.Warning.Render("● no remote")
+	}
+
+	if !candidate.Safety.HasUpstream {
+		return output.Warning.Render("● no upstream")
+	}
+
+	return output.Success.Render("● synced")
 }
