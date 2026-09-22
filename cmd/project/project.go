@@ -13,5 +13,6 @@ func init() {
 		openCmd,
 		statusCmd,
 		infoCmd,
+		cleanupCmd,
 	)
 }
