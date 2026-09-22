@@ -4,12 +4,17 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/adi-pr/dev/cmd/project"
 	"github.com/spf13/cobra"
 )
 
 var rootCmd = &cobra.Command{
 	Use:   "dev",
 	Short: "Personal development environment CLI",
+}
+
+func init() {
+	rootCmd.AddCommand(project.Cmd)
 }
 
 func Execute() {
