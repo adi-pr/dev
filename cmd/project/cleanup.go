@@ -1,7 +1,10 @@
 package project
 
 import (
+	"bufio"
 	"fmt"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/adi-pr/dev/internal/config"
@@ -44,7 +47,14 @@ var cleanupCmd = &cobra.Command{
 
 		renderCleanupCandidates(candidates, cleanupOlderThan)
 
-		return nil
+		if len(candidates) == 0 {
+			return nil
+		}
+
+		return runCleanup(
+			candidates,
+			cfg.ArchiveRoot,
+		)
 	},
 }
 
@@ -106,6 +116,8 @@ func renderCleanupCandidates(
 	}
 }
 
+
+
 func formatCleanupAge(lastActivity time.Time) string {
 	duration := time.Since(lastActivity)
 	days := int(duration.Hours() / 24)
@@ -125,5 +137,116 @@ func formatCleanupAge(lastActivity time.Time) string {
 
 	default:
 		return fmt.Sprintf("%dd ago", days)
+	}
+}
+
+func runCleanup(
+	candidates []projectdomain.CleanupCandidate,
+	archiveRoot string,
+) error {
+	reader := bufio.NewReader(os.Stdin)
+
+	fmt.Println()
+
+	for _, candidate := range candidates {
+		action, err := promptCleanupAction(
+			reader,
+			candidate,
+		)
+		if err != nil {
+			return err
+		}
+
+		switch action {
+		case "archive":
+			destination, err := projectdomain.Archive(
+				candidate,
+				archiveRoot,
+			)
+			if err != nil {
+				fmt.Printf(
+					"%s %s\n",
+					output.Error.Render("✗"),
+					err,
+				)
+				continue
+			}
+
+			fmt.Printf(
+				"%s Archived %s\n",
+				output.Success.Render("✓"),
+				output.Text.Copy().
+					Bold(true).
+					Render(candidate.Project.Name),
+			)
+
+			fmt.Printf(
+				"  %s\n",
+				output.Subtle.Render(
+					shortenPath(destination),
+				),
+			)
+
+		case "skip":
+			continue
+
+		case "quit":
+			return nil
+		}
+	}
+
+	return nil
+}
+
+func promptCleanupAction(
+	reader *bufio.Reader,
+	candidate projectdomain.CleanupCandidate,
+) (string, error) {
+	fmt.Println(
+		output.Text.Copy().
+			Bold(true).
+			Render(candidate.Project.Name),
+	)
+
+	fmt.Printf(
+		"%s ",
+		output.Primary.Render("[a]rchive"),
+	)
+
+	fmt.Printf(
+		"%s ",
+		output.Muted.Render("[s]kip"),
+	)
+
+	fmt.Printf(
+		"%s",
+		output.Muted.Render("[q]uit"),
+	)
+
+	fmt.Print(" > ")
+
+	input, err := reader.ReadString('\n')
+	if err != nil {
+		return "", err
+	}
+
+	switch strings.ToLower(strings.TrimSpace(input)) {
+	case "a", "archive":
+		return "archive", nil
+
+	case "s", "skip", "":
+		return "skip", nil
+
+	case "q", "quit":
+		return "quit", nil
+
+	default:
+		fmt.Println(
+			output.Error.Render(
+				"Choose archive, skip, or quit.",
+			),
+		)
+
+		return promptCleanupAction(reader, candidate)
 	}
 }

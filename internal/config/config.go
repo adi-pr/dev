@@ -9,6 +9,7 @@ import (
 
 type Config struct {
 	ProjectRoots []string `json:"project_roots"`
+	ArchiveRoot  string   `json:"archive_root"`
 	Editor       string   `json:"editor"`
 }
 

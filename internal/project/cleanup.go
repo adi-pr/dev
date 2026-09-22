@@ -163,3 +163,48 @@ func ParseAge(value string) (time.Duration, error) {
 		)
 	}
 }
+
+func Archive(
+	candidate CleanupCandidate,
+	archiveRoot string,
+) (string, error) {
+	if archiveRoot == "" {
+		return "", fmt.Errorf("archive root is not configured")
+	}
+
+	source := candidate.Project.Path
+	destination := filepath.Join(
+		archiveRoot,
+		filepath.Base(source),
+	)
+
+	// Never overwrite an existing archive.
+	if _, err := os.Stat(destination); err == nil {
+		return "", fmt.Errorf(
+			"archive destination already exists: %s",
+			destination,
+		)
+	} else if !os.IsNotExist(err) {
+		return "", fmt.Errorf(
+			"check archive destination: %w",
+			err,
+		)
+	}
+
+	if err := os.MkdirAll(archiveRoot, 0755); err != nil {
+		return "", fmt.Errorf(
+			"create archive directory: %w",
+			err,
+		)
+	}
+
+	if err := os.Rename(source, destination); err != nil {
+		return "", fmt.Errorf(
+			"archive %s: %w",
+			candidate.Project.Name,
+			err,
+		)
+	}
+
+	return destination, nil
+}
