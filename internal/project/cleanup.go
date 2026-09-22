@@ -42,29 +42,36 @@ func FindCleanupCandidates(
 	var candidates []CleanupCandidate
 
 	for _, p := range projects {
-		lastActivity, err := LastActivity(p)
+		candidate, err := NewCleanupCandidate(p)
 		if err != nil {
-			return nil, fmt.Errorf(
-				"check activity for %s: %w",
-				p.Name,
-				err,
-			)
+			return nil, err
 		}
 
-		if lastActivity.After(olderThan) {
+		if candidate.LastActivity.After(olderThan) {
 			continue
-		}
-
-		candidate := CleanupCandidate{
-			Project: p,
-			LastActivity: lastActivity,
-			Safety: CheckCleanupSafety(p),
 		}
 
 		candidates = append(candidates, candidate)
 	}
 
 	return candidates, nil
+}
+
+func NewCleanupCandidate(p Project) (CleanupCandidate, error) {
+	lastActivity, err := LastActivity(p)
+	if err != nil {
+		return CleanupCandidate{}, fmt.Errorf(
+			"check activity for %s: %w",
+			p.Name,
+			err,
+		)
+	}
+
+	return CleanupCandidate{
+		Project:      p,
+		LastActivity: lastActivity,
+		Safety:       CheckCleanupSafety(p),
+	}, nil
 }
 
 func LastActivity(p Project) (time.Time, error) {

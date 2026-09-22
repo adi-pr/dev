@@ -18,13 +18,9 @@ var cleanupOlderThan string
 var cleanupCmd = &cobra.Command{
 	Use:   "cleanup",
 	Short: "Find inactive projects",
+	Args:  cobra.MaximumNArgs(1),
 
 	RunE: func(cmd *cobra.Command, args []string) error {
-		age, err := projectdomain.ParseAge(cleanupOlderThan)
-		if err != nil {
-			return err
-		}
-
 		cfg, err := config.Load()
 		if err != nil {
 			return err
@@ -35,17 +31,44 @@ var cleanupCmd = &cobra.Command{
 			return err
 		}
 
-		cutoff := time.Now().Add(-age)
+		var candidates []projectdomain.CleanupCandidate
 
-		candidates, err := projectdomain.FindCleanupCandidates(
-			projects,
-			cutoff,
-		)
-		if err != nil {
-			return err
+		// Explicit project: age does not matter.
+		if len(args) == 1 {
+			p, err := projectdomain.Find(projects, args[0])
+			if err != nil {
+				return err
+			}
+
+			candidate, err := projectdomain.NewCleanupCandidate(p)
+			if err != nil {
+				return err
+			}
+
+			candidates = []projectdomain.CleanupCandidate{
+				candidate,
+			}
+		} else {
+			// Automatic discovery: use inactivity threshold.
+			age, err := projectdomain.ParseAge(cleanupOlderThan)
+			if err != nil {
+				return err
+			}
+
+			cutoff := time.Now().Add(-age)
+
+			candidates, err = projectdomain.FindCleanupCandidates(
+				projects,
+				cutoff,
+			)
+			if err != nil {
+				return err
+			}
 		}
 
-		renderCleanupCandidates(candidates, cleanupOlderThan)
+		targeted := len(args) == 1
+
+		renderCleanupCandidates(candidates, cleanupOlderThan, targeted)
 
 		if len(candidates) == 0 {
 			return nil
@@ -70,13 +93,21 @@ func init() {
 func renderCleanupCandidates(
 	candidates []projectdomain.CleanupCandidate,
 	threshold string,
+	targeted bool,
 ) {
+	subtitle := fmt.Sprintf(
+		"· inactive > %s",
+		threshold,
+	)
+
+	if targeted {
+		subtitle = "· targeted"
+	}
+
 	fmt.Printf(
 		"%s %s\n",
 		output.Primary.Render("Project Cleanup"),
-		output.Subtle.Render(
-			fmt.Sprintf("· inactive > %s", threshold),
-		),
+		output.Subtle.Render(subtitle),
 	)
 
 	fmt.Println(
@@ -87,7 +118,9 @@ func renderCleanupCandidates(
 
 	if len(candidates) == 0 {
 		fmt.Println(
-			output.Success.Render("No inactive projects found."),
+			output.Success.Render(
+				"No inactive projects found.",
+			),
 		)
 		return
 	}
