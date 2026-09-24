@@ -19,6 +19,7 @@ var (
 	sweepDryRun  bool
 	sweepYes     bool
 	sweepJSON    bool
+	sweepAll     bool
 )
 
 var sweepCmd = &cobra.Command{
@@ -26,10 +27,15 @@ var sweepCmd = &cobra.Command{
 	Short: "Delete local branches merged into the remote main branch",
 	Example: `  dev git sweep
   dev git sweep --dry-run
-  dev git sweep --base develop --yes`,
+  dev git sweep --base develop --yes
+  dev git sweep --all --dry-run`,
 	Args: cobra.NoArgs,
 
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if sweepAll {
+			return runSweepAll()
+		}
+
 		cwd, err := os.Getwd()
 		if err != nil {
 			return err
@@ -40,21 +46,12 @@ var sweepCmd = &cobra.Command{
 			return err
 		}
 
-		if !sweepNoFetch {
-			if err := gitdomain.Fetch(root, sweepRemote); err != nil {
-				return err
-			}
-		}
-
-		base := sweepBase
-		if base == "" {
-			base, err = gitdomain.DefaultBase(root, sweepRemote)
-			if err != nil {
-				return err
-			}
-		}
-
-		plan, err := gitdomain.PlanSweep(root, sweepRemote, base)
+		plan, err := gitdomain.PrepareSweep(
+			root,
+			sweepRemote,
+			sweepBase,
+			!sweepNoFetch,
+		)
 		if err != nil {
 			return err
 		}
@@ -82,7 +79,11 @@ var sweepCmd = &cobra.Command{
 			}
 		}
 
-		runSweep(plan)
+		fmt.Println()
+
+		if deleteSweepBranches(plan, "") > 0 {
+			printRestoreHint("git branch <name> <commit>")
+		}
 
 		return nil
 	},
@@ -132,6 +133,14 @@ func init() {
 		false,
 		"print merged branches as JSON without deleting",
 	)
+
+	sweepCmd.Flags().BoolVarP(
+		&sweepAll,
+		"all",
+		"a",
+		false,
+		"sweep every project under the configured project roots",
+	)
 }
 
 func renderSweepPlan(plan gitdomain.SweepPlan) {
@@ -152,9 +161,14 @@ func renderSweepPlan(plan gitdomain.SweepPlan) {
 		return
 	}
 
-	for _, branch := range plan.Branches {
+	renderSweepBranches(plan.Branches, "")
+}
+
+func renderSweepBranches(branches []gitdomain.SweepBranch, indent string) {
+	for _, branch := range branches {
 		fmt.Printf(
-			"%s %s %s\n",
+			"%s%s %s %s\n",
+			indent,
 			output.PadRight(output.Branch.Render(branch.Name), 32),
 			output.PadRight(
 				output.Subtle.Render(shortCommit(branch.Commit)),
@@ -205,15 +219,16 @@ func confirmSweep(count int) (bool, error) {
 	}
 }
 
-func runSweep(plan gitdomain.SweepPlan) {
-	fmt.Println()
-
+// deleteSweepBranches deletes each planned branch, printing one line per
+// branch, and returns how many were deleted.
+func deleteSweepBranches(plan gitdomain.SweepPlan, indent string) int {
 	deleted := 0
 
 	for _, branch := range plan.Branches {
 		if err := gitdomain.DeleteMerged(plan, branch); err != nil {
 			fmt.Printf(
-				"%s %s\n",
+				"%s%s %s\n",
+				indent,
 				output.Error.Render("✗"),
 				err,
 			)
@@ -223,21 +238,22 @@ func runSweep(plan gitdomain.SweepPlan) {
 		deleted++
 
 		fmt.Printf(
-			"%s Deleted %s %s\n",
+			"%s%s Deleted %s %s\n",
+			indent,
 			output.Success.Render("✓"),
 			output.Branch.Render(branch.Name),
 			output.Subtle.Render("("+shortCommit(branch.Commit)+")"),
 		)
 	}
 
-	if deleted > 0 {
-		fmt.Println()
-		fmt.Println(
-			output.Subtle.Render(
-				"Restore a branch with: git branch <name> <commit>",
-			),
-		)
-	}
+	return deleted
+}
+
+func printRestoreHint(command string) {
+	fmt.Println()
+	fmt.Println(
+		output.Subtle.Render("Restore a branch with: " + command),
+	)
 }
 
 func shortCommit(commit string) string {

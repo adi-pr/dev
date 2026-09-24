@@ -1,7 +1,9 @@
 package git
 
 import (
+	"errors"
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -30,6 +32,38 @@ type SweepPlan struct {
 // RemoteBase returns the fully qualified remote base ref, e.g. origin/main.
 func (p SweepPlan) RemoteBase() string {
 	return p.Remote + "/" + p.Base
+}
+
+// ErrNoRemote is returned by PrepareSweep when the repository does not have
+// the requested remote.
+var ErrNoRemote = errors.New("remote not configured")
+
+// PrepareSweep fetches (unless fetch is false), resolves the base branch when
+// base is empty, and plans a sweep of the repository at root.
+func PrepareSweep(root, remote, base string, fetch bool) (SweepPlan, error) {
+	remotes, err := Remotes(root)
+	if err != nil {
+		return SweepPlan{}, err
+	}
+
+	if !slices.Contains(remotes, remote) {
+		return SweepPlan{}, fmt.Errorf("%s: %w", remote, ErrNoRemote)
+	}
+
+	if fetch {
+		if err := Fetch(root, remote); err != nil {
+			return SweepPlan{}, err
+		}
+	}
+
+	if base == "" {
+		base, err = DefaultBase(root, remote)
+		if err != nil {
+			return SweepPlan{}, err
+		}
+	}
+
+	return PlanSweep(root, remote, base)
 }
 
 // Fetch updates remote-tracking refs and prunes deleted remote branches so
@@ -109,9 +143,11 @@ func PlanSweep(root, remote, base string) (SweepPlan, error) {
 			continue
 		}
 
+		// Output is whitespace-trimmed, so the last line loses its empty
+		// trailing fields; pad them back.
 		fields := strings.Split(line, "\t")
-		if len(fields) < 5 {
-			continue
+		for len(fields) < 5 {
+			fields = append(fields, "")
 		}
 
 		name := fields[0]
