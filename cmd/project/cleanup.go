@@ -215,6 +215,36 @@ func runCleanup(
 				),
 			)
 
+		case "delete":
+			confirmed, err := confirmDelete(reader, candidate)
+			if err != nil {
+				return err
+			}
+
+			if !confirmed {
+				fmt.Println(
+					output.Muted.Render("Delete cancelled."),
+				)
+				continue
+			}
+
+			if err := projectdomain.Delete(candidate); err != nil {
+				fmt.Printf(
+					"%s %s\n",
+					output.Error.Render("✗"),
+					err,
+				)
+				continue
+			}
+
+			fmt.Printf(
+				"%s Deleted %s\n",
+				output.Success.Render("✓"),
+				output.Text.Copy().
+					Bold(true).
+					Render(candidate.Project.Name),
+			)
+
 		case "skip":
 			continue
 
@@ -303,6 +333,28 @@ func promptCleanupAction(
 	}
 }
 
+// confirmDelete requires the project name to be typed back exactly.
+func confirmDelete(
+	reader *bufio.Reader,
+	candidate projectdomain.CleanupCandidate,
+) (bool, error) {
+	fmt.Printf(
+		"  %s %s %s ",
+		output.Error.Render("Permanently delete"),
+		output.Subtle.Render(shortenPath(candidate.Project.Path)),
+		output.Muted.Render(
+			fmt.Sprintf("— type %q to confirm >", candidate.Project.Name),
+		),
+	)
+
+	input, err := reader.ReadString('\n')
+	if err != nil {
+		return false, err
+	}
+
+	return strings.TrimSpace(input) == candidate.Project.Name, nil
+}
+
 func renderCleanupState(
 	candidate projectdomain.CleanupCandidate,
 ) string {
@@ -328,6 +380,24 @@ func renderCleanupState(
 			fmt.Sprintf(
 				"● %d unpushed",
 				candidate.Safety.AheadOfRemote,
+			),
+		)
+	}
+
+	if candidate.Safety.UnpushedCommits > 0 {
+		return output.Warning.Render(
+			fmt.Sprintf(
+				"● %d unpushed on other branches",
+				candidate.Safety.UnpushedCommits,
+			),
+		)
+	}
+
+	if candidate.Safety.Stashes > 0 {
+		return output.Warning.Render(
+			fmt.Sprintf(
+				"● %d stashed",
+				candidate.Safety.Stashes,
 			),
 		)
 	}

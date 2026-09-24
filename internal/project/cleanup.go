@@ -16,11 +16,13 @@ type CleanupCandidate struct {
 }
 
 type CleanupSafety struct {
-	Dirty         bool `json:"dirty"`
-	HasRemote     bool `json:"has_remote"`
-	HasUpstream   bool `json:"has_upstream"`
-	AheadOfRemote int  `json:"ahead_of_remote"`
-	Untracked     int  `json:"untracked"`
+	Dirty           bool `json:"dirty"`
+	HasRemote       bool `json:"has_remote"`
+	HasUpstream     bool `json:"has_upstream"`
+	AheadOfRemote   int  `json:"ahead_of_remote"`
+	Untracked       int  `json:"untracked"`
+	Stashes         int  `json:"stashes"`
+	UnpushedCommits int  `json:"unpushed_commits"`
 }
 
 var ignoredActivityDirs = map[string]bool{
@@ -220,6 +222,38 @@ func Archive(
 	return destination, nil
 }
 
+// Delete permanently removes a project. Safety is checked again at delete
+// time, so a project that changed after it was listed is refused.
+func Delete(candidate CleanupCandidate) error {
+	p := candidate.Project
+
+	if p.Path == "" || !filepath.IsAbs(p.Path) {
+		return fmt.Errorf("refusing to delete %q: invalid path", p.Name)
+	}
+
+	current := CleanupCandidate{
+		Project: p,
+		Safety:  CheckCleanupSafety(p),
+	}
+
+	if current.Risk() != CleanupSafe {
+		return fmt.Errorf(
+			"%s is no longer safe to delete",
+			p.Name,
+		)
+	}
+
+	if err := os.RemoveAll(p.Path); err != nil {
+		return fmt.Errorf(
+			"delete %s: %w",
+			p.Name,
+			err,
+		)
+	}
+
+	return nil
+}
+
 func CheckCleanupSafety(p Project) CleanupSafety {
 	if !p.Git {
 		return CleanupSafety{}
@@ -249,6 +283,29 @@ func CheckCleanupSafety(p Project) CleanupSafety {
 	)
 
 	safety.HasRemote = remote != ""
+
+	stashes := gitOutput(
+		p.Path,
+		"stash",
+		"list",
+	)
+
+	if stashes != "" {
+		safety.Stashes = len(strings.Split(stashes, "\n"))
+	}
+
+	unpushed := gitOutput(
+		p.Path,
+		"rev-list",
+		"--count",
+		"--branches",
+		"--not",
+		"--remotes",
+	)
+
+	if unpushed != "" {
+		fmt.Sscanf(unpushed, "%d", &safety.UnpushedCommits)
+	}
 
 	upstream := gitOutput(
 		p.Path,
@@ -296,6 +353,14 @@ func (c CleanupCandidate) Risk() CleanupRisk {
 	}
 
 	if c.Safety.AheadOfRemote > 0 {
+		return CleanupUnsafe
+	}
+
+	if c.Safety.UnpushedCommits > 0 {
+		return CleanupUnsafe
+	}
+
+	if c.Safety.Stashes > 0 {
 		return CleanupUnsafe
 	}
 
