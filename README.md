@@ -18,6 +18,12 @@ The goal is to build:
 * **One interface** — related workflows live under `dev` instead of scattered scripts.
 * **Structured output** — commands should support both human-readable output and formats such as JSON.
 
+## Desktop integration
+
+`dev` will eventually power features in [my shell customisations](https://github.com/adi-pr/shell/tree/custom), my fork of the [Caelestia](https://github.com/caelestia-dots/shell) rice for Arch Linux.
+
+This is why commands offer JSON output: the shell can call `dev` and read its results directly, so the terminal and the desktop share the same logic.
+
 ## Commands
 
 The CLI may eventually include areas such as:
