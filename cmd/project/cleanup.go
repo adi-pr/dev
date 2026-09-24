@@ -2,6 +2,7 @@ package project
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -13,7 +14,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var cleanupOlderThan string
+var (
+	cleanupOlderThan string
+	cleanupJSON      bool
+)
 
 var cleanupCmd = &cobra.Command{
 	Use:   "cleanup",
@@ -66,6 +70,10 @@ var cleanupCmd = &cobra.Command{
 			}
 		}
 
+		if cleanupJSON {
+			return encodeCleanupCandidates(candidates)
+		}
+
 		targeted := len(args) == 1
 
 		renderCleanupCandidates(candidates, cleanupOlderThan, targeted)
@@ -88,6 +96,35 @@ func init() {
 		"6m",
 		"inactivity threshold (e.g. 30d, 6m, 1y)",
 	)
+
+	cleanupCmd.Flags().BoolVar(
+		&cleanupJSON,
+		"json",
+		false,
+		"print candidates as JSON without prompting",
+	)
+}
+
+func encodeCleanupCandidates(
+	candidates []projectdomain.CleanupCandidate,
+) error {
+	type cleanupJSONCandidate struct {
+		projectdomain.CleanupCandidate
+		Risk projectdomain.CleanupRisk `json:"risk"`
+	}
+
+	result := make([]cleanupJSONCandidate, 0, len(candidates))
+
+	for _, candidate := range candidates {
+		result = append(result, cleanupJSONCandidate{
+			CleanupCandidate: candidate,
+			Risk:             candidate.Risk(),
+		})
+	}
+
+	encoder := json.NewEncoder(os.Stdout)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(result)
 }
 
 func renderCleanupCandidates(

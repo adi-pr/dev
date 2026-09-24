@@ -343,6 +343,23 @@ const (
 	CleanupUnsafe
 )
 
+func (r CleanupRisk) String() string {
+	switch r {
+	case CleanupSafe:
+		return "safe"
+
+	case CleanupReview:
+		return "review"
+
+	default:
+		return "unsafe"
+	}
+}
+
+func (r CleanupRisk) MarshalText() ([]byte, error) {
+	return []byte(r.String()), nil
+}
+
 func (c CleanupCandidate) Risk() CleanupRisk {
 	if !c.Project.Git {
 		return CleanupReview
