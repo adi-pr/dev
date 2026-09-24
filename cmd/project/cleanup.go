@@ -309,6 +309,13 @@ func promptCleanupAction(
 		renderCleanupState(candidate),
 	)
 
+	if candidate.Safety.Error != "" {
+		fmt.Printf(
+			"  %s\n",
+			output.Subtle.Render(candidate.Safety.Error),
+		)
+	}
+
 	for {
 		switch candidate.Risk() {
 		case projectdomain.CleanupSafe:
@@ -397,6 +404,10 @@ func renderCleanupState(
 ) string {
 	if !candidate.Project.Git {
 		return output.Subtle.Render("no git")
+	}
+
+	if candidate.Safety.Error != "" {
+		return output.Error.Render("● git error")
 	}
 
 	if candidate.Safety.Dirty {

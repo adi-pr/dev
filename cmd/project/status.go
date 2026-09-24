@@ -71,6 +71,17 @@ var statusCmd = &cobra.Command{
 				continue
 			}
 
+			if status.Error != "" {
+				fmt.Printf(
+					"%s %s %s\n",
+					output.PadRight(name, 18),
+					output.PadRight(output.Subtle.Render("—"), 15),
+					output.Error.Render("● git error"),
+				)
+
+				continue
+			}
+
 			branch := status.Branch
 			if branch == "" {
 				branch = "detached"

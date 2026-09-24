@@ -35,7 +35,10 @@ var infoCmd = &cobra.Command{
 			return err
 		}
 
-		info := project.GetInfo(p)
+		info, err := project.GetInfo(p)
+		if err != nil {
+			return err
+		}
 
 		if infoJSON {
 			encoder := json.NewEncoder(os.Stdout)

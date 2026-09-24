@@ -53,7 +53,12 @@ func DefaultBase(root, remote string) (string, error) {
 	}
 
 	for _, candidate := range []string{"main", "master"} {
-		if refExists(root, "refs/remotes/"+remote+"/"+candidate) {
+		exists, err := refExists(root, "refs/remotes/"+remote+"/"+candidate)
+		if err != nil {
+			return "", err
+		}
+
+		if exists {
 			return candidate, nil
 		}
 	}
@@ -74,7 +79,12 @@ func PlanSweep(root, remote, base string) (SweepPlan, error) {
 		Base:   base,
 	}
 
-	if !refExists(root, "refs/remotes/"+plan.RemoteBase()) {
+	exists, err := refExists(root, "refs/remotes/"+plan.RemoteBase())
+	if err != nil {
+		return plan, err
+	}
+
+	if !exists {
 		return plan, fmt.Errorf(
 			"remote branch %s does not exist",
 			plan.RemoteBase(),
@@ -172,7 +182,7 @@ func DeleteMerged(plan SweepPlan, branch SweepBranch) error {
 	return nil
 }
 
-func refExists(root, ref string) bool {
-	_, err := run(root, "show-ref", "--verify", "--quiet", ref)
-	return err == nil
+func refExists(root, ref string) (bool, error) {
+	_, ok, err := probe(root, "show-ref", "--verify", "--quiet", ref)
+	return ok, err
 }

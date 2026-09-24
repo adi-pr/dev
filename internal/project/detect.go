@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/adi-pr/dev/internal/git"
 )
 
 type Info struct {
@@ -21,29 +23,49 @@ type Info struct {
 	Module      string `json:"module,omitempty"`
 }
 
-func GetInfo(p Project) Info {
+func GetInfo(p Project) (Info, error) {
 	info := Info{
 		Name: p.Name,
 		Path: p.Path,
 		Git:  p.Git,
 	}
 
-	detectGit(p, &info)
+	if err := detectGit(p, &info); err != nil {
+		return Info{}, err
+	}
+
 	detectGo(p.Path, &info)
 	detectPython(p.Path, &info)
 	detectJavaScript(p.Path, &info)
 
-	return info
+	return info, nil
 }
 
-func detectGit(p Project, info *Info) {
+func detectGit(p Project, info *Info) error {
 	if !p.Git {
-		return
+		return nil
 	}
 
-	info.Branch = gitOutput(p.Path, "branch", "--show-current")
-	info.Dirty = gitOutput(p.Path, "status", "--porcelain") != ""
-	info.Remote = gitOutput(p.Path, "remote", "get-url", "origin")
+	branch, err := git.CurrentBranch(p.Path)
+	if err != nil {
+		return err
+	}
+
+	tree, err := git.Status(p.Path)
+	if err != nil {
+		return err
+	}
+
+	remote, err := git.RemoteURL(p.Path, "origin")
+	if err != nil {
+		return err
+	}
+
+	info.Branch = branch
+	info.Dirty = tree.Dirty
+	info.Remote = remote
+
+	return nil
 }
 
 func detectGo(path string, info *Info) {

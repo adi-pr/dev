@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/adi-pr/dev/internal/git"
 )
 
 type CleanupCandidate struct {
@@ -23,6 +25,9 @@ type CleanupSafety struct {
 	Untracked       int  `json:"untracked"`
 	Stashes         int  `json:"stashes"`
 	UnpushedCommits int  `json:"unpushed_commits"`
+	// Error is set when git could not be queried; the project is then
+	// treated as unsafe.
+	Error string `json:"error,omitempty"`
 }
 
 var ignoredActivityDirs = map[string]bool{
@@ -60,7 +65,20 @@ func FindCleanupCandidates(
 }
 
 func NewCleanupCandidate(p Project) (CleanupCandidate, error) {
-	lastActivity, err := LastActivity(p)
+	// Git failures mark the project unsafe rather than aborting the
+	// listing, so one broken repository doesn't block the others.
+	safety, err := CheckCleanupSafety(p)
+	if err != nil {
+		safety.Error = err.Error()
+	}
+
+	// With git unusable, age the project by its files alone.
+	activityProject := p
+	if safety.Error != "" {
+		activityProject.Git = false
+	}
+
+	lastActivity, err := LastActivity(activityProject)
 	if err != nil {
 		return CleanupCandidate{}, fmt.Errorf(
 			"check activity for %s: %w",
@@ -72,7 +90,7 @@ func NewCleanupCandidate(p Project) (CleanupCandidate, error) {
 	return CleanupCandidate{
 		Project:      p,
 		LastActivity: lastActivity,
-		Safety:       CheckCleanupSafety(p),
+		Safety:       safety,
 	}, nil
 }
 
@@ -116,13 +134,13 @@ func LastActivity(p Project) (time.Time, error) {
 	}
 
 	if p.Git {
-		value := gitOutput(p.Path, "log", "-1", "--format=%cI")
+		commitTime, ok, err := git.LastCommitTime(p.Path)
+		if err != nil {
+			return time.Time{}, err
+		}
 
-		if value != "" {
-			commitTime, err := time.Parse(time.RFC3339, value)
-			if err == nil && commitTime.After(latest) {
-				latest = commitTime
-			}
+		if ok && commitTime.After(latest) {
+			latest = commitTime
 		}
 	}
 
@@ -231,9 +249,18 @@ func Delete(candidate CleanupCandidate) error {
 		return fmt.Errorf("refusing to delete %q: invalid path", p.Name)
 	}
 
+	safety, err := CheckCleanupSafety(p)
+	if err != nil {
+		return fmt.Errorf(
+			"check %s before delete: %w",
+			p.Name,
+			err,
+		)
+	}
+
 	current := CleanupCandidate{
 		Project: p,
-		Safety:  CheckCleanupSafety(p),
+		Safety:  safety,
 	}
 
 	if current.Risk() != CleanupSafe {
@@ -254,85 +281,57 @@ func Delete(candidate CleanupCandidate) error {
 	return nil
 }
 
-func CheckCleanupSafety(p Project) CleanupSafety {
+// CheckCleanupSafety reports what would be lost by removing a project. An
+// error means safety could not be established.
+func CheckCleanupSafety(p Project) (CleanupSafety, error) {
 	if !p.Git {
-		return CleanupSafety{}
+		return CleanupSafety{}, nil
 	}
 
 	safety := CleanupSafety{}
 
-	status := gitOutput(
-		p.Path,
-		"status",
-		"--porcelain",
-	)
-
-	if status != "" {
-		safety.Dirty = true
-
-		for _, line := range strings.Split(status, "\n") {
-			if strings.HasPrefix(line, "??") {
-				safety.Untracked++
-			}
-		}
+	tree, err := git.Status(p.Path)
+	if err != nil {
+		return safety, err
 	}
 
-	remote := gitOutput(
-		p.Path,
-		"remote",
-	)
+	safety.Dirty = tree.Dirty
+	safety.Untracked = tree.Untracked
 
-	safety.HasRemote = remote != ""
-
-	stashes := gitOutput(
-		p.Path,
-		"stash",
-		"list",
-	)
-
-	if stashes != "" {
-		safety.Stashes = len(strings.Split(stashes, "\n"))
+	remotes, err := git.Remotes(p.Path)
+	if err != nil {
+		return safety, err
 	}
 
-	unpushed := gitOutput(
-		p.Path,
-		"rev-list",
-		"--count",
-		"--branches",
-		"--not",
-		"--remotes",
-	)
+	safety.HasRemote = len(remotes) > 0
 
-	if unpushed != "" {
-		fmt.Sscanf(unpushed, "%d", &safety.UnpushedCommits)
+	safety.Stashes, err = git.StashCount(p.Path)
+	if err != nil {
+		return safety, err
 	}
 
-	upstream := gitOutput(
-		p.Path,
-		"rev-parse",
-		"--abbrev-ref",
-		"--symbolic-full-name",
-		"@{upstream}",
-	)
+	safety.UnpushedCommits, err = git.UnpushedCommits(p.Path)
+	if err != nil {
+		return safety, err
+	}
+
+	upstream, err := git.Upstream(p.Path)
+	if err != nil {
+		return safety, err
+	}
 
 	if upstream == "" {
-		return safety
+		return safety, nil
 	}
 
 	safety.HasUpstream = true
 
-	ahead := gitOutput(
-		p.Path,
-		"rev-list",
-		"--count",
-		"@{upstream}..HEAD",
-	)
-
-	if ahead != "" {
-		fmt.Sscanf(ahead, "%d", &safety.AheadOfRemote)
+	safety.AheadOfRemote, err = git.CommitsAhead(p.Path, upstream, "HEAD")
+	if err != nil {
+		return safety, err
 	}
 
-	return safety
+	return safety, nil
 }
 
 type CleanupRisk int
@@ -363,6 +362,10 @@ func (r CleanupRisk) MarshalText() ([]byte, error) {
 func (c CleanupCandidate) Risk() CleanupRisk {
 	if !c.Project.Git {
 		return CleanupReview
+	}
+
+	if c.Safety.Error != "" {
+		return CleanupUnsafe
 	}
 
 	if c.Safety.Dirty {

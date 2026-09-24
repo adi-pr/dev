@@ -3,11 +3,12 @@ package project
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/adi-pr/dev/internal/git"
 )
 
 type Project struct {
@@ -23,6 +24,7 @@ type Status struct {
 	Branch     string     `json:"branch,omitempty"`
 	Dirty      bool       `json:"dirty"`
 	LastCommit *time.Time `json:"last_commit,omitempty"`
+	Error      string     `json:"error,omitempty"`
 }
 
 func Discover(roots []string) ([]Project, error) {
@@ -81,31 +83,37 @@ func GetStatus(p Project) Status {
 		return status
 	}
 
-	status.Branch = gitOutput(p.Path, "branch", "--show-current")
-
-	dirty := gitOutput(p.Path, "status", "--porcelain")
-	status.Dirty = dirty != ""
-
-	lastCommit := gitOutput(p.Path, "log", "-1", "--format=%cI")
-
-	if lastCommit != "" {
-		t, err := time.Parse(time.RFC3339, lastCommit)
-		if err == nil {
-			status.LastCommit = &t
-		}
+	// A broken repository is reported on its own row rather than failing
+	// the whole listing.
+	if err := readStatus(p, &status); err != nil {
+		status.Error = err.Error()
 	}
 
 	return status
 }
 
-func gitOutput(path string, args ...string) string {
-	cmd := exec.Command("git", args...)
-	cmd.Dir = path
-
-	output, err := cmd.Output()
+func readStatus(p Project, status *Status) error {
+	branch, err := git.CurrentBranch(p.Path)
 	if err != nil {
-		return ""
+		return err
 	}
 
-	return strings.TrimSpace(string(output))
+	tree, err := git.Status(p.Path)
+	if err != nil {
+		return err
+	}
+
+	lastCommit, ok, err := git.LastCommitTime(p.Path)
+	if err != nil {
+		return err
+	}
+
+	status.Branch = branch
+	status.Dirty = tree.Dirty
+
+	if ok {
+		status.LastCommit = &lastCommit
+	}
+
+	return nil
 }
