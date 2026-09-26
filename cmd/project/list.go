@@ -50,7 +50,7 @@ var listCmd = &cobra.Command{
 				Bold(true).
 				Render(p.Name)
 
-			path := output.Subtle.Render(shortenPath(p.Path))
+			path := output.Subtle.Render(output.ShortenPath(p.Path))
 
 			git := ""
 			if p.Git {

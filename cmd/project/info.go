@@ -72,7 +72,7 @@ func renderProjectInfo(info project.Info) {
 		),
 	)
 
-	printInfoRow("Path", shortenPath(info.Path))
+	printInfoRow("Path", output.ShortenPath(info.Path))
 
 	if info.Git {
 		state := output.Success.Render("● clean")

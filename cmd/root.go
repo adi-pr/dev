@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/adi-pr/dev/cmd/config"
 	"github.com/adi-pr/dev/cmd/git"
 	"github.com/adi-pr/dev/cmd/project"
 	"github.com/spf13/cobra"
@@ -17,6 +18,7 @@ var rootCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(project.Cmd)
 	rootCmd.AddCommand(git.Cmd)
+	rootCmd.AddCommand(config.Cmd)
 }
 
 func Execute() {

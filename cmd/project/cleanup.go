@@ -247,7 +247,7 @@ func runCleanup(
 			fmt.Printf(
 				"  %s\n",
 				output.Subtle.Render(
-					shortenPath(destination),
+					output.ShortenPath(destination),
 				),
 			)
 
@@ -384,7 +384,7 @@ func confirmDelete(
 	fmt.Printf(
 		"  %s %s %s ",
 		output.Error.Render("Permanently delete"),
-		output.Subtle.Render(shortenPath(candidate.Project.Path)),
+		output.Subtle.Render(output.ShortenPath(candidate.Project.Path)),
 		output.Muted.Render(
 			fmt.Sprintf("— type %q to confirm >", candidate.Project.Name),
 		),

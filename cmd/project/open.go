@@ -34,7 +34,7 @@ var openCmd = &cobra.Command{
 
 		editor := cfg.Editor
 		if editor == "" {
-			editor = "code"
+			editor = config.DefaultEditor
 		}
 
 		command := exec.Command(editor, p.Path)

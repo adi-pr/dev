@@ -2,8 +2,6 @@ package project
 
 import (
 	"fmt"
-	"os"
-	"strings"
 	"time"
 
 	"github.com/adi-pr/dev/internal/config"
@@ -87,13 +85,4 @@ func renderState(dirty bool) string {
 	}
 
 	return output.Success.Render("● clean")
-}
-
-func shortenPath(path string) string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return path
-	}
-
-	return strings.Replace(path, home, "~", 1)
 }

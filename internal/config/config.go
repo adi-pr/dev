@@ -7,19 +7,30 @@ import (
 	"path/filepath"
 )
 
+// DefaultEditor is used when the config does not set an editor.
+const DefaultEditor = "code"
+
 type Config struct {
 	ProjectRoots []string `json:"project_roots"`
 	ArchiveRoot  string   `json:"archive_root"`
 	Editor       string   `json:"editor"`
 }
 
-func Load() (Config, error) {
+// Path returns the location of the config file, which may not exist yet.
+func Path() (string, error) {
 	configDir, err := os.UserConfigDir()
 	if err != nil {
-		return Config{}, fmt.Errorf("get config directory: %w", err)
+		return "", fmt.Errorf("get config directory: %w", err)
 	}
 
-	path := filepath.Join(configDir, "dev", "config.json")
+	return filepath.Join(configDir, "dev", "config.json"), nil
+}
+
+func Load() (Config, error) {
+	path, err := Path()
+	if err != nil {
+		return Config{}, err
+	}
 
 	data, err := os.ReadFile(path)
 	if err != nil {
