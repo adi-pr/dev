@@ -14,6 +14,8 @@ var openCmd = &cobra.Command{
 	Short: "Open a project",
 	Args:  cobra.ExactArgs(1),
 
+	ValidArgsFunction: completeProjectNames,
+
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.Load()
 		if err != nil {

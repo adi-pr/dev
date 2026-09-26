@@ -19,6 +19,8 @@ var infoCmd = &cobra.Command{
 	Short: "Show project information",
 	Args:  cobra.ExactArgs(1),
 
+	ValidArgsFunction: completeProjectNames,
+
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.Load()
 		if err != nil {

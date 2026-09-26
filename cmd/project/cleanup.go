@@ -24,6 +24,8 @@ var cleanupCmd = &cobra.Command{
 	Short: "Find inactive projects",
 	Args:  cobra.MaximumNArgs(1),
 
+	ValidArgsFunction: completeProjectNames,
+
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.Load()
 		if err != nil {
