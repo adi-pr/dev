@@ -6,6 +6,7 @@ import (
 
 	"github.com/adi-pr/dev/cmd/config"
 	"github.com/adi-pr/dev/cmd/git"
+	"github.com/adi-pr/dev/cmd/ports"
 	"github.com/adi-pr/dev/cmd/project"
 	"github.com/spf13/cobra"
 )
@@ -19,6 +20,7 @@ func init() {
 	rootCmd.AddCommand(project.Cmd)
 	rootCmd.AddCommand(git.Cmd)
 	rootCmd.AddCommand(config.Cmd)
+	rootCmd.AddCommand(ports.Cmd)
 }
 
 func Execute() {

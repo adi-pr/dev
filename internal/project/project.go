@@ -72,6 +72,34 @@ func Find(projects []Project, name string) (Project, error) {
 	return Project{}, fmt.Errorf("project %q not found", name)
 }
 
+// Containing returns the project whose directory is path or one of its
+// parents. Project paths are resolved through symlinks first, since callers
+// may pass real paths such as a process's working directory.
+func Containing(projects []Project, path string) (Project, bool) {
+	var (
+		match   Project
+		longest int
+	)
+
+	for _, p := range projects {
+		root := p.Path
+
+		if resolved, err := filepath.EvalSymlinks(root); err == nil {
+			root = resolved
+		}
+
+		inside := path == root ||
+			strings.HasPrefix(path, root+string(filepath.Separator))
+
+		// Prefer the deepest match in case project roots are nested.
+		if inside && len(root) > longest {
+			match, longest = p, len(root)
+		}
+	}
+
+	return match, longest > 0
+}
+
 func GetStatus(p Project) Status {
 	status := Status{
 		Name: p.Name,
