@@ -2,7 +2,6 @@ package project
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -124,9 +123,7 @@ func encodeCleanupCandidates(
 		})
 	}
 
-	encoder := json.NewEncoder(os.Stdout)
-	encoder.SetIndent("", "  ")
-	return encoder.Encode(result)
+	return output.JSON(result)
 }
 
 func renderCleanupCandidates(

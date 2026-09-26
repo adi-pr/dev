@@ -1,9 +1,7 @@
 package project
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/adi-pr/dev/internal/config"
@@ -30,9 +28,7 @@ var listCmd = &cobra.Command{
 		}
 
 		if projectJSON {
-			encoder := json.NewEncoder(os.Stdout)
-			encoder.SetIndent("", "  ")
-			return encoder.Encode(projects)
+			return output.JSON(projects)
 		}
 
 		fmt.Printf(

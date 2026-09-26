@@ -1,9 +1,7 @@
 package project
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/adi-pr/dev/internal/config"
@@ -43,9 +41,7 @@ var infoCmd = &cobra.Command{
 		}
 
 		if infoJSON {
-			encoder := json.NewEncoder(os.Stdout)
-			encoder.SetIndent("", " ")
-			return encoder.Encode(info)
+			return output.JSON(info)
 		}
 
 		renderProjectInfo(info)

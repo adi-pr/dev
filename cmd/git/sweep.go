@@ -2,7 +2,6 @@ package git
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -57,9 +56,7 @@ var sweepCmd = &cobra.Command{
 		}
 
 		if sweepJSON {
-			encoder := json.NewEncoder(os.Stdout)
-			encoder.SetIndent("", "  ")
-			return encoder.Encode(plan)
+			return output.JSON(plan)
 		}
 
 		renderSweepPlan(plan)

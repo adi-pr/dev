@@ -1,10 +1,8 @@
 package git
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"sync"
 
@@ -37,9 +35,7 @@ func runSweepAll() error {
 	results, skipped := planAllSweeps(projects)
 
 	if sweepJSON {
-		encoder := json.NewEncoder(os.Stdout)
-		encoder.SetIndent("", "  ")
-		return encoder.Encode(results)
+		return output.JSON(results)
 	}
 
 	total := renderSweepAll(results, skipped)
